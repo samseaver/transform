@@ -146,12 +146,10 @@ def upload_genome(input_gff_file=None, input_fasta_file=None, workspace_name=Non
 
             if feature['type'] not in features_type_id_counter_dict:
                 features_type_id_counter_dict[feature['type']] = 1
-                feature_id = "%s_%s" % (feature['type'],str(1)) 
-            else: 
+#                feature_id = "%s_%s" % (feature['type'],str(1)) 
+            else:
                 features_type_id_counter_dict[feature['type']] += 1 
-                feature_id = "%s_%s" % (feature['type'],str(features_type_id_counter_dict[feature['type']]))
-
-            feature_object["feature_id"]=feature_id
+#                feature_id = "%s_%s" % (feature['type'],str(features_type_id_counter_dict[feature['type']]))
 
             #GFF use 1-based integers
             substr_start = feature["start"]-1 
@@ -173,13 +171,16 @@ def upload_genome(input_gff_file=None, input_fasta_file=None, workspace_name=Non
 
             feature_object["quality_warnings"]=list()
 
-            alias_dict = { feature["ID"] : [ "Original "+feature["type"]+" ID" ] }
-            feature_id_map_dict[feature["ID"]] = feature_id
-            feature_id_map_dict[feature_id] = feature["ID"]
+            feature_object["feature_id"]=feature["ID"]
+#            feature_id_map_dict[feature["ID"]] = feature_id
+#            feature_id_map_dict[feature_id] = feature["ID"]
+
+#            alias_dict = { feature["ID"] : [ "Original "+feature["type"]+" ID" ] }
+            alias_dict = {}
             if("Name" in feature):
-                alias_dict[feature["Name"]] = ["Original "+feature["type"]+" Name"]
+                alias_dict[feature["Name"]] = ["Name"]
             if("pacid" in feature):
-                alias_dict[feature["pacid"]] = ["Original "+feature["type"]+" PAC ID"]
+                alias_dict[feature["pacid"]] = ["pacid"]
             feature_object["aliases"]=alias_dict
     
             for alias in alias_dict:
@@ -200,27 +201,40 @@ def upload_genome(input_gff_file=None, input_fasta_file=None, workspace_name=Non
             if(feature["type"] == "gene"):
                 feature_object["gene_properties"]={ "children_CDS" : [], "children_mRNA" : [] }
             if(feature["type"] == "mRNA"):
-                feature_object["mRNA_properties"]={ "parent_gene" : ('gene',feature_id_map_dict[feature["Parent"]]), "associated_CDS" : ("CDS","") }
+#                feature_object["mRNA_properties"]={ "parent_gene" : ('gene',feature_id_map_dict[feature["Parent"]]), "associated_CDS" : ("CDS","") }
+                feature_object["mRNA_properties"]={ "parent_gene" : ('gene',feature["Parent"]), "associated_CDS" : ("CDS","") }
             if(feature["type"] == "CDS"):
-                feature_object["CDS_properties"]= { "parent_gene" : ("gene",""), "associated_mRNA" : ("mRNA",feature_id_map_dict[feature["Parent"]]) }
+#                feature_object["CDS_properties"]= { "parent_gene" : ("gene",""), "associated_mRNA" : ("mRNA",feature_id_map_dict[feature["Parent"]]) }
+                feature_object["CDS_properties"]= { "parent_gene" : ("gene",""), "associated_mRNA" : ("mRNA",feature["Parent"]) }
 
-                if(feature_id_map_dict[feature["Parent"]] not in aggregated_cds_map):
-                    aggregated_cds_map[feature_id_map_dict[feature["Parent"]]]=list()
-                aggregated_cds_map[feature_id_map_dict[feature["Parent"]]].append(feature_id)
+#                if(feature_id_map_dict[feature["Parent"]] not in aggregated_cds_map):
+#                    aggregated_cds_map[feature_id_map_dict[feature["Parent"]]]=list()
+#                aggregated_cds_map[feature_id_map_dict[feature["Parent"]]].append(feature_id)
+                if(feature["Parent"] not in aggregated_cds_map):
+                    aggregated_cds_map[feature["Parent"]]=list()
+                    aggregated_cds_map[feature["Parent"]].append(feature["ID"])
+                
 
-            features_type_containers_dict[feature["type"]][feature_id] = feature_object
-            
+#            features_type_containers_dict[feature["type"]][feature_id] = feature_object
+            if(feature["ID"] in features_type_containers_dict[feature["type"]]):
+                print "Duplicate ID Error for "+feature["ID"]
+            else:
+                features_type_containers_dict[feature["type"]][feature["ID"]] = feature_object
+           
             if("UTR" in feature["type"]):
-                if(feature_id_map_dict[feature["Parent"]] not in feature_grouping_dict["mRNA_with_UTR"]):
-                    feature_grouping_dict["mRNA_with_UTR"][feature_id_map_dict[feature["Parent"]]]={}
-                feature_grouping_dict["mRNA_with_UTR"][feature_id_map_dict[feature["Parent"]]][feature_id]=1
+#                if(feature_id_map_dict[feature["Parent"]] not in feature_grouping_dict["mRNA_with_UTR"]):
+#                    feature_grouping_dict["mRNA_with_UTR"][feature_id_map_dict[feature["Parent"]]]={}
+#                feature_grouping_dict["mRNA_with_UTR"][feature_id_map_dict[feature["Parent"]]][feature_id]=1
+                if(feature["Parent"] not in feature_grouping_dict["mRNA_with_UTR"]):
+                    feature_grouping_dict["mRNA_with_UTR"][feature["Parent"]]={}
+                    feature_grouping_dict["mRNA_with_UTR"][feature["Parent"]][feature["ID"]]=1
 
     #####################################################
     #Aggregate CDS
     #####################################################
     aggregated_cds=dict()
     for mRNA_id in aggregated_cds_map:
-        for cds_id in sorted(aggregated_cds_map[mRNA_id], key = lambda x: int(x.split('_')[1])):
+        for cds_id in sorted(aggregated_cds_map[mRNA_id], key = lambda x: int(x.split('.')[-1])):
             CDS_Object = features_type_containers_dict["CDS"][cds_id]
 
             #Save first object, otherwise append sequence and location
@@ -241,7 +255,7 @@ def upload_genome(input_gff_file=None, input_fasta_file=None, workspace_name=Non
     features_type_containers_dict["CDS"]=dict()
     features_type_id_counter_dict["CDS"]=0
 
-    for mRNA in sorted(aggregated_cds, key=lambda x: int(x.split('_')[1])):
+    for mRNA in sorted(aggregated_cds): #, key=lambda x: int(x.split('.')[-1])):
 
         if("dna_sequence" in aggregated_cds[mRNA]):
             #Build up the protein object for the protein container
@@ -257,7 +271,7 @@ def upload_genome(input_gff_file=None, input_fasta_file=None, workspace_name=Non
             try: 
                 protein_sequence = rna_sequence.translate(cds=True)
             except CodonTable.TranslationError as te:
-                print "TranslationError for "+feature_id_map_dict[mRNA]+": "+str(te)
+                print "TranslationError for "+mRNA+": "+str(te)
 
             protein_object["amino_acid_sequence"] = str(protein_sequence).upper()
             protein_object["md5"] = hashlib.md5(protein_object["amino_acid_sequence"]).hexdigest()
@@ -276,13 +290,17 @@ def upload_genome(input_gff_file=None, input_fasta_file=None, workspace_name=Non
 
         #Update dict of aggregated CDS objects
         features_type_id_counter_dict["CDS"] += 1
-        feature_id = "CDS_%s" % (str(features_type_id_counter_dict["CDS"]))
-        aggregated_cds[mRNA]["feature_id"]=feature_id
-        features_type_containers_dict["CDS"][feature_id]=aggregated_cds[mRNA]
-        feature_id_map_dict[mRNA+".CDS"]=feature_id
+#        feature_id = "CDS_%s" % (str(features_type_id_counter_dict["CDS"]))
+        
+        #Phytozome appends CDS and a number to the mRNA identifier
+        aggregated_cds[mRNA]["feature_id"]=mRNA+".CDS"
+        features_type_containers_dict["CDS"][mRNA+".CDS"]=aggregated_cds[mRNA]
+#        feature_id_map_dict[mRNA+".CDS"]=feature_id
 
-        grouping_tuples = [("mRNA_with_CDS",feature_id_map_dict[mRNA],mRNA+".CDS"),("CDS_with_mRNA",mRNA+".CDS",feature_id_map_dict[mRNA])]
-        feature_grouping_dict["mRNA_with_CDS"][feature_id_map_dict[mRNA]]={}
+#        grouping_tuples = [("mRNA_with_CDS",feature_id_map_dict[mRNA],mRNA+".CDS"),("CDS_with_mRNA",mRNA+".CDS",feature_id_map_dict[mRNA])]
+#        feature_grouping_dict["mRNA_with_CDS"][feature_id_map_dict[mRNA]]={}
+        grouping_tuples = [("mRNA_with_CDS",mRNA,mRNA+".CDS"),("CDS_with_mRNA",mRNA+".CDS",mRNA)]
+        feature_grouping_dict["mRNA_with_CDS"][mRNA]={}
 
         for group in grouping_tuples:
             if(group[1] not in feature_grouping_dict[group[0]]):
@@ -306,14 +324,18 @@ def upload_genome(input_gff_file=None, input_fasta_file=None, workspace_name=Non
                     features_type_containers_dict["mRNA"][mRNA_id]["locations"].append(features_type_containers_dict[UTR_Type][UTR_id]["locations"][0])
                     features_type_containers_dict["mRNA"][mRNA_id]["dna_sequence"]+=features_type_containers_dict[UTR_Type][UTR_id]["dna_sequence"]
         else:
-            print "Missing UTR :",mRNA_id,feature_id_map_dict[mRNA_id]
+            print "Missing UTR :",mRNA_id
 
-        if(feature_id_map_dict[mRNA_id] in feature_grouping_dict["mRNA_with_CDS"]):
-            for CDS_id in sorted(feature_grouping_dict["mRNA_with_CDS"][feature_id_map_dict[mRNA_id]], key = lambda x: int(re.split('[_.]',x)[1])):
-                features_type_containers_dict["mRNA"][mRNA_id]["locations"].append(features_type_containers_dict["CDS"][feature_id_map_dict[CDS_id]]["locations"][0])
-                features_type_containers_dict["mRNA"][mRNA_id]["dna_sequence"]+=features_type_containers_dict["CDS"][feature_id_map_dict[CDS_id]]["dna_sequence"]
+#        if(feature_id_map_dict[mRNA_id] in feature_grouping_dict["mRNA_with_CDS"]):
+#            for CDS_id in sorted(feature_grouping_dict["mRNA_with_CDS"][feature_id_map_dict[mRNA_id]], key = lambda x: int(re.split('[_.]',x)[1])):
+#                features_type_containers_dict["mRNA"][mRNA_id]["locations"].append(features_type_containers_dict["CDS"][feature_id_map_dict[CDS_id]]["locations"][0])
+#                features_type_containers_dict["mRNA"][mRNA_id]["dna_sequence"]+=features_type_containers_dict["CDS"][feature_id_map_dict[CDS_id]]["dna_sequence"]
+        if(mRNA_id in feature_grouping_dict["mRNA_with_CDS"]):
+            for CDS_id in sorted(feature_grouping_dict["mRNA_with_CDS"][mRNA_id], key = lambda x: int(re.split('[_.]',x)[1])):
+                features_type_containers_dict["mRNA"][mRNA_id]["locations"].append(features_type_containers_dict["CDS"][CDS_id]["locations"][0])
+                features_type_containers_dict["mRNA"][mRNA_id]["dna_sequence"]+=features_type_containers_dict["CDS"][CDS_id]["dna_sequence"]
         else:
-            print "Missing CDS :",mRNA_id,feature_id_map_dict[mRNA_id]
+            print "Missing CDS :",mRNA_id
 
         if(mRNA_id in feature_grouping_dict["mRNA_with_UTR"]):
             UTR_Type = "three_prime_UTR"
@@ -330,22 +352,27 @@ def upload_genome(input_gff_file=None, input_fasta_file=None, workspace_name=Non
                                              "gene_with_CDS" : 0, "CDS_with_gene" : 0 }
 
     for gene in feature_grouping_dict["gene_with_mRNA"]:
-        gene_id = feature_id_map_dict[gene]
+#        gene_id = feature_id_map_dict[gene]
+        gene_id = gene
         for mRNA in feature_grouping_dict["gene_with_mRNA"][gene]:
-            mRNA_id = feature_id_map_dict[mRNA]
+#            mRNA_id = feature_id_map_dict[mRNA]
+            mRNA_id = mRNA
             features_type_containers_dict["gene"][gene_id]["gene_properties"]["children_mRNA"].append( ["mRNA",mRNA_id] )
             features_type_containers_dict["mRNA"][mRNA_id]["mRNA_properties"]["parent_gene"] = ["gene",gene_id]
     
     for mRNA in feature_grouping_dict["mRNA_with_CDS"]:
-        mRNA_id = feature_id_map_dict[mRNA]
+#        mRNA_id = feature_id_map_dict[mRNA]
+        mRNA_id = mRNA
         for CDS in feature_grouping_dict["mRNA_with_CDS"][mRNA]:
-            CDS_id = feature_id_map_dict[CDS]
+#            CDS_id = feature_id_map_dict[CDS]
+            CDS_id = CDS
             features_type_containers_dict["CDS"][CDS_id]["CDS_properties"]["associated_mRNA"] = ["mRNA",mRNA_id]
             features_type_containers_dict["mRNA"][mRNA_id]["mRNA_properties"]["associated_CDS"] = ["CDS",CDS_id]
 
             for gene in feature_grouping_dict["mRNA_with_gene"][mRNA]:
-                gene_id = feature_id_map_dict[gene]
-    
+#                gene_id = feature_id_map_dict[gene]
+                gene_id = gene
+
                 if(CDS not in feature_grouping_dict["CDS_with_gene"]):
                     feature_grouping_dict["CDS_with_gene"][CDS]={}
                 feature_grouping_dict["CDS_with_gene"][CDS][gene]=1
@@ -466,11 +493,12 @@ def upload_genome(input_gff_file=None, input_fasta_file=None, workspace_name=Non
         handle_id = handles[0]
     genome_annotation['gff_handle_ref'] = handle_id
 
-    for ftr in feature_lookup_dict.keys():
-        array=ftr.split('_')
-        feature_type='_'.join(array[0:-1])
-        if(ftr not in feature_container_objects[feature_type]['features']):
-            print "Missing Featuer Lookup: "+ftr
+#    for ftr in feature_lookup_dict.keys():
+#        array=ftr.split('_')
+#        feature_type='_'.join(array[0:-1])
+#        print array,feature_type,ftr
+#        if(ftr not in feature_container_objects[feature_type]['features']):
+#            print "Missing Featuer Lookup: "+ftr
 
     genome_annotation['feature_lookup'] = feature_lookup_dict
     genome_annotation['protein_container_ref'] = protein_reference
