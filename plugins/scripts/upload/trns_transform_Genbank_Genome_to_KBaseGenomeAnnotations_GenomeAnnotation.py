@@ -715,10 +715,10 @@ def upload_genome(shock_service_url=None,
             #MAKING ALL IDS UNIQUE ACROSS THE GENOME.
             if feature_type not in feature_type_id_counter_dict:
                 feature_type_id_counter_dict[feature_type] = 1;
-                feature_id = "%s_%s" % (feature_type,str(1)) 
+#                feature_id = "%s_%s" % (feature_type,str(1)) 
             else: 
                 feature_type_id_counter_dict[feature_type] += 1; 
-                feature_id = "%s_%s" % (feature_type,str(feature_type_id_counter_dict[feature_type]))
+#                feature_id = "%s_%s" % (feature_type,str(feature_type_id_counter_dict[feature_type]))
 
             for feature_key_value_pair in feature_key_value_pairs_list: 
                 #the key value pair removing unnecessary white space (including new lines as these often span multiple lines)
